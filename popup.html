@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Текст видео YouTube</title>
+    <link rel="stylesheet" href="popup.css">
+    <script type="module" src="popup.js"></script>
+  </head>
+  <body>
+    <main id="app" aria-busy="false">
+      <h1>Текст видео YouTube</h1>
+      <p class="hint">Готовая расшифровка из субтитров видео.</p>
+      <p id="video-title" class="video-title"></p>
+      <button id="extract" class="primary" type="button" disabled>Получить текст</button>
+      <p id="status" role="status" aria-live="polite">Проверяю текущую вкладку…</p>
+      <label class="option">
+        <input id="timestamps" type="checkbox" disabled>
+        Добавить таймкоды
+      </label>
+      <label class="sr-only" for="transcript">Расшифровка видео</label>
+      <textarea id="transcript" rows="10" readonly placeholder="Здесь появится текст видео."></textarea>
+      <div class="actions">
+        <button id="copy" type="button" disabled>Копировать</button>
+        <button id="download" type="button" disabled>Скачать TXT</button>
+      </div>
+      <p class="hint footer">Оставьте это окно открытым, пока загружается текст.</p>
+    </main>
+  </body>
+</html>

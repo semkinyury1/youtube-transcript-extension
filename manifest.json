@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube — текст видео",
+  "description": "Копирование готовой расшифровки YouTube и сохранение в TXT с таймкодами или без них.",
+  "version": "0.2.1",
+  "permissions": ["activeTab", "scripting"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Получить текст видео YouTube",
+    "default_popup": "popup.html"
+  }
+}
