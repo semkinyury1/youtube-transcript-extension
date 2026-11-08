@@ -1,5 +1,6 @@
 import { readYouTubeTranscript } from "./extractor.js";
-import { createDownloadName, formatTranscript, getVideoId } from "./transcript.js";
+import { downloadTranscript } from "./download.js";
+import { formatTranscript, getVideoId } from "./transcript.js";
 
 export async function initializePopup(doc, chromeApi, clipboard) {
   const app = doc.getElementById("app");
@@ -27,9 +28,9 @@ export async function initializePopup(doc, chromeApi, clipboard) {
     renderOutput();
     title.textContent = "";
     extract.disabled = true;
-    extract.textContent = "Загружаю…";
+    extract.textContent = "Загружаю...";
     app.setAttribute("aria-busy", "true");
-    setStatus("Открываю расшифровку YouTube. Оставьте это окно открытым…");
+    setStatus("Загружаю расшифровку. Оставьте окно открытым.");
     try {
       const [tab] = await chromeApi.tabs.query({ active: true, currentWindow: true });
       const videoId = getVideoId(tab?.url);
@@ -76,28 +77,20 @@ export async function initializePopup(doc, chromeApi, clipboard) {
     } catch {
       output.focus();
       output.select();
-      setStatus("Не удалось скопировать автоматически. Текст выделен — нажмите Ctrl+C или ⌘C.", "error");
+      setStatus("Текст выделен. Нажмите Ctrl+C или Cmd+C для копирования.", "error");
     }
   });
 
   download.addEventListener("click", () => {
     if (!transcript) return;
-    const blob = new doc.defaultView.Blob(["\ufeff", output.value], { type: "text/plain;charset=utf-8" });
-    const url = doc.defaultView.URL.createObjectURL(blob);
-    const link = doc.createElement("a");
-    link.href = url;
-    link.download = createDownloadName(transcript.title, transcript.videoId);
-    doc.body.append(link);
-    link.click();
-    link.remove();
-    doc.defaultView.setTimeout(() => doc.defaultView.URL.revokeObjectURL(url), 1000);
+    downloadTranscript(doc, transcript, timestamps.checked);
     setStatus("TXT передан браузеру для сохранения.");
   });
 
   try {
     const [tab] = await chromeApi.tabs.query({ active: true, currentWindow: true });
     if (getVideoId(tab?.url)) {
-      title.textContent = (tab.title ?? "Видео YouTube").replace(/\s*[-–] YouTube$/, "");
+      title.textContent = (tab.title ?? "Видео YouTube").replace(/\s*[-\u2013] YouTube$/, "");
       extract.disabled = false;
       setStatus("Нажмите «Получить текст».");
     } else {

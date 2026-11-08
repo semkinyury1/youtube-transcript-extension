@@ -1,5 +1,6 @@
 import { readYouTubeTranscript } from "./extractor.js";
-import { createDownloadName, formatTranscript, getVideoId } from "./transcript.js";
+import { downloadTranscript } from "./download.js";
+import { formatTranscript, getVideoId } from "./transcript.js";
 
 export function installTranscriptPanel(doc, readTranscript = readYouTubeTranscript) {
   if (doc.getElementById("youtube-transcript-extension-panel")) return null;
@@ -7,7 +8,7 @@ export function installTranscriptPanel(doc, readTranscript = readYouTubeTranscri
   const host = doc.createElement("div");
   host.id = "youtube-transcript-extension-panel";
   const root = host.attachShadow({ mode: "open" });
-  // Only static extension markup enters innerHTML. Video titles and text use textContent/value.
+  // Keep page content out of this HTML template.
   root.innerHTML = `
     <style>
       :host { display:block; margin-bottom:16px; font:14px/1.5 system-ui,sans-serif;
@@ -120,9 +121,9 @@ export function installTranscriptPanel(doc, readTranscript = readYouTubeTranscri
     transcript = null;
     render();
     el("extract").disabled = true;
-    el("extract").textContent = "Загружаю…";
+    el("extract").textContent = "Загружаю...";
     el("body").setAttribute("aria-busy", "true");
-    status("Получаю расшифровку YouTube…");
+    status("Загружаю расшифровку.");
     try {
       const result = await readTranscript({ signal: controller.signal });
       if (thisRequest !== requestId || getVideoId(view.location.href) !== thisVideo) return;
@@ -160,25 +161,16 @@ export function installTranscriptPanel(doc, readTranscript = readYouTubeTranscri
       if (thisRequest !== requestId) return;
       el("output").focus();
       el("output").select();
-      status("Текст выделен — нажмите Ctrl+C или ⌘C для копирования.", "error");
+      status("Текст выделен. Нажмите Ctrl+C или Cmd+C для копирования.", "error");
     }
   });
   el("download").addEventListener("click", () => {
     sync();
     if (!transcript) return;
-    const blob = new view.Blob(["\ufeff", el("output").value], { type: "text/plain;charset=utf-8" });
-    const url = view.URL.createObjectURL(blob);
-    const link = doc.createElement("a");
-    link.href = url;
-    link.download = createDownloadName(transcript.title, transcript.videoId);
-    doc.body.append(link);
-    link.click();
-    link.remove();
-    view.setTimeout(() => view.URL.revokeObjectURL(url), 1000);
+    downloadTranscript(doc, transcript, el("timestamps").checked);
     status("TXT передан браузеру для сохранения.");
   });
 
-  // YouTube is an SPA: reset results on navigation and reattach after layout changes.
   const observer = new view.MutationObserver(scheduleSync);
   observer.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["video-id", "dark"] });
   const onNavigationStart = () => {
@@ -187,7 +179,7 @@ export function installTranscriptPanel(doc, readTranscript = readYouTubeTranscri
     transcript = null;
     render();
     el("extract").disabled = true;
-    status("Загружается страница видео…");
+    status("Загружается страница видео.");
   };
   const onNavigationFinish = () => { navigating = false; sync(); };
   doc.addEventListener("yt-navigate-start", onNavigationStart);

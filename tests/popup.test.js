@@ -119,7 +119,7 @@ test("downloads a UTF-8 TXT with BOM, Cyrillic text and the chosen timestamps", 
   p.dom.window.URL.revokeObjectURL = () => {};
   p.dom.window.HTMLAnchorElement.prototype.click = function () { name = this.download; };
   p.el("download").click();
-  assert.equal(name, "Урок JavaScript — abcdefghijk.txt");
+  assert.equal(name, "Урок JavaScript - abcdefghijk.txt");
   assert.equal(blob.type, "text/plain;charset=utf-8");
   const bytes = await new Promise((resolve, reject) => {
     const reader = new p.dom.window.FileReader();

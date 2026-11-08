@@ -20,7 +20,12 @@ test("packages a classic content script limited to desktop YouTube origins", () 
   }
 });
 
-test("the actual packaged script loads a modern transcript invisibly and displays its text", async (t) => {
+test("loads the packaged popup with its local modules", async () => {
+  const popup = await import("../dist/popup.js");
+  assert.equal(typeof popup.initializePopup, "function");
+});
+
+test("the packaged script loads a modern transcript invisibly and downloads its text", async (t) => {
   const fixture = readFileSync(new URL("./fixtures/modern-transcript.html", import.meta.url), "utf8");
   const dom = new JSDOM(`<ytd-watch-flexy video-id="abcdefghijk">
     <ytd-watch-metadata><h1>Проверка готового расширения</h1></ytd-watch-metadata>
@@ -57,4 +62,13 @@ test("the actual packaged script loads a modern transcript invisibly and display
   assert.equal(hiddenWhileLoading, true);
   assert.equal(nativePanel.getAttribute("visibility"), "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
   assert.equal(doc.querySelectorAll("style").length, 0);
+
+  let filename;
+  let blob;
+  dom.window.URL.createObjectURL = (value) => { blob = value; return "blob:packaged-test"; };
+  dom.window.URL.revokeObjectURL = () => {};
+  dom.window.HTMLAnchorElement.prototype.click = function () { filename = this.download; };
+  panel.getElementById("download").click();
+  assert.equal(filename, "Проверка готового расширения - abcdefghijk.txt");
+  assert.equal(blob.type, "text/plain;charset=utf-8");
 });

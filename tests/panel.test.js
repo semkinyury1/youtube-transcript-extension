@@ -153,7 +153,7 @@ test("saves the page panel text as a UTF-8 TXT with timestamps", async (t) => {
   p.dom.window.URL.revokeObjectURL = () => {};
   p.dom.window.HTMLAnchorElement.prototype.click = function () { filename = this.download; };
   p.el("download").click();
-  assert.equal(filename, "Пример видео — abcdefghijk.txt");
+  assert.equal(filename, "Пример видео - abcdefghijk.txt");
   const bytes = await new Promise((resolve, reject) => {
     const reader = new p.dom.window.FileReader();
     reader.onload = () => resolve(new Uint8Array(reader.result));

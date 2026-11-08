@@ -21,5 +21,5 @@ export function formatTranscript(segments, includeTimestamps = false) {
 export function createDownloadName(title, videoId) {
   const safeTitle = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ").trim().slice(0, 100).replace(/[. ]+$/g, "");
-  return `${safeTitle || "YouTube"} — ${videoId}.txt`;
+  return `${safeTitle || "YouTube"} - ${videoId}.txt`;
 }

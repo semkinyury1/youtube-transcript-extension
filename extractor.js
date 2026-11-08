@@ -1,4 +1,4 @@
-// Chrome serializes this function into the tab. Keep its helpers inside it.
+// executeScript serializes this function without its module imports.
 export async function readYouTubeTranscript({
   timeoutMs = 12000,
   pollIntervalMs = 150,
@@ -24,21 +24,31 @@ export async function readYouTubeTranscript({
   let stableSince = 0;
   let unreadableRows = false;
 
-  const isHiddenPanel = (panel) => panel && (
-    panel.closest("[hidden]") !== null
-    || panel.getAttribute("visibility")?.includes("HIDDEN")
-  );
+  const panelSelector = "ytd-engagement-panel-section-list-renderer";
+  const transcriptSelector = "ytd-transcript-renderer, transcript-segment-list-view-model, transcript-segment-view-model";
+  const isHidden = (element) => Boolean(element?.closest(`[hidden], ${panelSelector}[visibility*="HIDDEN"]`));
+
+  function isCurrentPage() {
+    const currentUrl = new URL(window.location.href);
+    return currentUrl.origin === pageUrl.origin && currentUrl.pathname === "/watch"
+      && currentUrl.searchParams.get("v") === videoId;
+  }
+
+  function findCurrentWatchPage() {
+    const watchPage = document.querySelector("ytd-watch-flexy");
+    const currentVideoId = watchPage?.getAttribute("video-id");
+    if (currentVideoId && currentVideoId !== videoId) return null;
+    return watchPage;
+  }
 
   let finishBackgroundLoading;
   function startBackgroundLoading() {
-    const panelSelector = "ytd-engagement-panel-section-list-renderer";
     const existingVisiblePanels = new Set(Array.from(document.querySelectorAll(panelSelector))
-      .filter((panel) => !isHiddenPanel(panel)));
+      .filter((panel) => !isHidden(panel)));
     const backgroundPanels = new Set();
     const attribute = `data-yte-background-${Math.random().toString(36).slice(2)}`;
     const style = document.createElement("style");
-    // Keep a measurable viewport for YouTube's row rendering, without taking up
-    // sidebar space or allowing its automatic scroll to move the page.
+    // Keep the panel measurable so YouTube renders its rows.
     style.textContent = `[${attribute}] {
       position: fixed !important; top: 0 !important; left: 0 !important;
       width: 400px !important; height: 80vh !important;
@@ -48,27 +58,20 @@ export async function readYouTubeTranscript({
     (document.head ?? document.documentElement).append(style);
 
     const hideAutomaticPanels = () => {
-      const currentUrl = new URL(window.location.href);
-      if (currentUrl.origin !== pageUrl.origin || currentUrl.pathname !== "/watch"
-          || currentUrl.searchParams.get("v") !== videoId) return;
-      const currentVideoId = document.querySelector("ytd-watch-flexy")?.getAttribute("video-id");
-      if (currentVideoId && currentVideoId !== videoId) return;
+      if (!isCurrentPage() || !findCurrentWatchPage()) return;
       for (const panel of document.querySelectorAll(panelSelector)) {
         if (existingVisiblePanels.has(panel)) continue;
         const target = panel.getAttribute("target-id");
-        // Modern panels have no target-id even while their rows are loading.
+        // New transcript panels may not have a target-id.
         if (target && target !== "engagement-panel-searchable-transcript"
-            && target !== "PAmodern_transcript_view" && !panel.querySelector(
-          "ytd-transcript-renderer, transcript-segment-list-view-model, transcript-segment-view-model",
-        )) continue;
+            && target !== "PAmodern_transcript_view" && !panel.querySelector(transcriptSelector)) continue;
         if (!backgroundPanels.has(panel)) {
           backgroundPanels.add(panel);
           panel.setAttribute(attribute, "");
         }
       }
     };
-    // Mutation observers run before paint, including for asynchronously created
-    // modern panels outside watch-flexy. Existing panels are hidden before click.
+    // Hide new panels before the browser paints them.
     const observer = new MutationObserver(hideAutomaticPanels);
     observer.observe(document.documentElement, {
       childList: true, subtree: true, attributes: true, attributeFilter: ["visibility", "target-id"],
@@ -79,20 +82,14 @@ export async function readYouTubeTranscript({
       hideAutomaticPanels();
       observer.disconnect();
       try {
-        const currentUrl = new URL(window.location.href);
-        // Navigation can reuse the same native element for the next video.
-        if (currentUrl.origin !== pageUrl.origin || currentUrl.pathname !== "/watch"
-            || currentUrl.searchParams.get("v") !== videoId) return;
-        const currentVideoId = document.querySelector("ytd-watch-flexy")?.getAttribute("video-id");
-        if (currentVideoId && currentVideoId !== videoId) return;
+        // YouTube may reuse this panel for the next video.
+        if (!isCurrentPage() || !findCurrentWatchPage()) return;
         for (const panel of backgroundPanels) {
-          if (!panel.isConnected || isHiddenPanel(panel)) continue;
+          if (!panel.isConnected || isHidden(panel)) continue;
           const close = panel.querySelector("#visibility-button button, #visibility-button [role='button']")
             ?? panel.querySelector("#visibility-button");
           close?.click();
-          // Some newer headers have no recognizable close button. Reflect the
-          // hidden state on both the custom element and its visibility attribute.
-          if (!isHiddenPanel(panel)) {
+          if (!isHidden(panel)) {
             if ("visibility" in panel) panel.visibility = "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN";
             panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
           }
@@ -105,28 +102,23 @@ export async function readYouTubeTranscript({
   }
 
   function findTranscriptRoot(watchPage) {
-    // Modern expanded panels can lack target-id and live outside watch-flexy.
-    const panels = Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"))
-      .filter((panel) => !isHiddenPanel(panel) && panel.querySelector(
-        "ytd-transcript-renderer, transcript-segment-list-view-model, transcript-segment-view-model",
-      ));
+    // Some layouts mount the transcript outside watch-flexy.
+    const panels = Array.from(document.querySelectorAll(panelSelector))
+      .filter((panel) => !isHidden(panel) && panel.querySelector(transcriptSelector));
     const expandedPanel = panels.find((panel) => panel.getAttribute("visibility")?.includes("EXPANDED"));
     return expandedPanel ?? panels[0] ?? Array.from(watchPage.querySelectorAll("ytd-transcript-renderer"))
-      .find((renderer) => !isHiddenPanel(renderer.closest("ytd-engagement-panel-section-list-renderer")));
+      .find((renderer) => !isHidden(renderer));
   }
 
   try {
     while (Date.now() < deadline) {
       if (signal?.aborted) return fail("CANCELLED", "Загрузка отменена.");
-      const currentUrl = new URL(window.location.href);
-      if (currentUrl.origin !== pageUrl.origin || currentUrl.pathname !== "/watch"
-          || currentUrl.searchParams.get("v") !== videoId) {
+      if (!isCurrentPage()) {
         return fail("VIDEO_CHANGED", "Видео сменилось во время загрузки. Нажмите «Получить текст» ещё раз.");
       }
 
-      const watchPage = document.querySelector("ytd-watch-flexy");
-      if (!watchPage || (watchPage.getAttribute("video-id")
-          && watchPage.getAttribute("video-id") !== videoId)) {
+      const watchPage = findCurrentWatchPage();
+      if (!watchPage) {
         lastSignature = "";
         await pause();
         continue;
@@ -135,7 +127,7 @@ export async function readYouTubeTranscript({
       const transcript = findTranscriptRoot(watchPage);
       const rows = Array.from(transcript?.querySelectorAll(
         "ytd-transcript-segment-renderer, transcript-segment-view-model",
-      ) ?? []);
+      ) ?? []).filter((row) => !isHidden(row));
       const segments = rows
         .map((row) => ({
           text: normalize(row.querySelector(
@@ -158,7 +150,7 @@ export async function readYouTubeTranscript({
         }
         if (Date.now() - stableSince >= settleMs) {
           const title = normalize(watchPage.querySelector("ytd-watch-metadata h1")?.textContent)
-            || normalize(document.title.replace(/\s*[-–] YouTube$/, "")) || "Видео YouTube";
+            || normalize(document.title.replace(/\s*[-\u2013] YouTube$/, "")) || "Видео YouTube";
           return {
             ok: true,
             transcript: {
@@ -174,7 +166,6 @@ export async function readYouTubeTranscript({
       }
       lastSignature = "";
 
-      // Structural selectors work regardless of the YouTube interface language.
       if (!expanded) {
         const expand = watchPage.querySelector("#description-inline-expander #expand");
         if (expand) {
@@ -197,9 +188,7 @@ export async function readYouTubeTranscript({
     }
 
     if (signal?.aborted) return fail("CANCELLED", "Загрузка отменена.");
-    const watchPage = document.querySelector("ytd-watch-flexy");
-    if (!watchPage || (watchPage.getAttribute("video-id")
-        && watchPage.getAttribute("video-id") !== videoId)) {
+    if (!findCurrentWatchPage()) {
       return fail("PAGE_NOT_READY", "Страница видео ещё не загрузилась. Дождитесь загрузки и попробуйте снова.");
     }
     if (unreadableRows) {

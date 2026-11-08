@@ -33,7 +33,7 @@ test("formats timestamps without removing legitimate repeated lines", () => {
 });
 
 test("creates a usable TXT filename while preserving Russian titles", () => {
-  assert.equal(createDownloadName('Урок: "JavaScript" / ввод?\n', "abcdefghijk"), "Урок JavaScript ввод — abcdefghijk.txt");
-  assert.equal(createDownloadName("...", "abcdefghijk"), "YouTube — abcdefghijk.txt");
+  assert.equal(createDownloadName('Урок: "JavaScript" / ввод?\n', "abcdefghijk"), "Урок JavaScript ввод - abcdefghijk.txt");
+  assert.equal(createDownloadName("...", "abcdefghijk"), "YouTube - abcdefghijk.txt");
   assert.ok(createDownloadName("а".repeat(200), "abcdefghijk").length < 130);
 });

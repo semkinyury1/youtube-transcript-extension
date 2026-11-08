@@ -26,7 +26,7 @@ function page(t, content, options = {}) {
   return dom;
 }
 
-// Run the serialized function in a separate page realm, as executeScript does.
+// Match executeScript's serialization into the page context.
 function extract(dom, options = {}) {
   return vm.runInContext(`(${readYouTubeTranscript.toString()})({...${JSON.stringify({
     timeoutMs: 250, pollIntervalMs: 3, settleMs: 10, ...options,
@@ -48,7 +48,7 @@ function backgroundPage(t, { modern = false, renderRows = true } = {}) {
       closeClicks++;
       panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
     });
-    // The modern panel can appear outside watch-flexy before it has any rows.
+    // New panels can appear outside watch-flexy before their rows load.
     doc.body.append(panel);
     dom.window.setTimeout(() => {
       const style = dom.window.getComputedStyle(panel);
@@ -76,7 +76,6 @@ for (const modern of [false, true]) {
     assert.equal(setup.panel.getAttribute("visibility"), "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN");
     assert.equal(setup.doc.querySelectorAll("style").length, 0, "temporary styles must be removed");
     assert.equal(setup.panel.getAttributeNames().some((name) => name.startsWith("data-yte-background-")), false);
-    // Reopening the native panel manually must work without leftover hiding styles.
     setup.panel.setAttribute("visibility", "ENGAGEMENT_PANEL_VISIBILITY_EXPANDED");
     assert.notEqual(setup.dom.window.getComputedStyle(setup.panel).visibility, "hidden");
   });
@@ -154,7 +153,7 @@ test("closes a modern panel without a known close button and lets YouTube reopen
   const setup = backgroundPage(t, { modern: true });
   setup.doc.querySelector("button").addEventListener("click", () => {
     setup.panel.querySelector("#visibility-button").remove();
-    // Model the native custom element's reflected visibility property.
+    // Match YouTube's reflected visibility property.
     Object.defineProperty(setup.panel, "visibility", {
       get() { return this.getAttribute("visibility"); },
       set(value) { this.setAttribute("visibility", value); },
@@ -294,6 +293,35 @@ test("does not read subtitle-looking rows outside the transcript panel", async (
   const result = await extract(dom, { timeoutMs: 25 });
   assert.equal(result.ok, false);
   assert.equal(result.code, "TRANSCRIPT_UNAVAILABLE");
+});
+
+for (const [name, content] of [
+  ["hidden renderer", `<ytd-transcript-renderer hidden>${segment("Старый текст")}</ytd-transcript-renderer>`],
+  ["hidden ancestor", `<div hidden><ytd-transcript-renderer>${segment("Старый текст")}</ytd-transcript-renderer></div>`],
+  ["hidden renderer in a visible panel", transcript(`<div hidden>${segment("Старый текст")}</div>`)],
+]) {
+  test(`ignores a hidden legacy transcript: ${name}`, async (t) => {
+    const dom = page(t, content);
+    const result = await extract(dom, { timeoutMs: 25 });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "TRANSCRIPT_UNAVAILABLE");
+  });
+}
+
+test("reads a visible legacy transcript without an engagement panel", async (t) => {
+  const dom = page(t, `<ytd-transcript-renderer>${segment("Текущий текст")}</ytd-transcript-renderer>`);
+  const result = await extract(dom);
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.transcript.segments[0].text, "Текущий текст");
+});
+
+test("reads visible rows without including hidden obsolete rows", async (t) => {
+  const dom = page(t, transcript(`<div hidden>${segment("Старый текст")}</div>` + segment("Текущий текст")));
+  const result = await extract(dom);
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.transcript.segments)), [
+    { text: "Текущий текст", timestamp: "0:00" },
+  ]);
 });
 
 test("reports unavailable transcript without claiming that loading timed out", async (t) => {

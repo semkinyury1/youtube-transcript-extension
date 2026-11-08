@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "YouTube — текст видео",
+  "name": "Текст видео для YouTube",
   "description": "Копирование готовой расшифровки YouTube и сохранение в TXT с таймкодами или без них.",
   "version": "0.2.1",
   "permissions": ["activeTab", "scripting"],

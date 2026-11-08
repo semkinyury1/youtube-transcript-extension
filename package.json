@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check extractor.js && node --check transcript.js && node --check popup.js && node --check panel.js && node --check scripts/package.js",
+    "check": "node --check extractor.js && node --check transcript.js && node --check download.js && node --check popup.js && node --check panel.js && node --check scripts/package.js",
     "package": "node scripts/package.js"
   },
   "engines": {
